@@ -26,6 +26,12 @@ certutil -hashfile dsh-ad-manage-1.0.0.tgz SHA256
 
 安装后需**重启 DSH**；之后在侧边栏进入「dsh-ad-manage 域管理」。
 
+## 界面
+
+| 域连接配置 | 域用户管理 | OU 树联动 |
+|---|---|---|
+| ![域连接配置](docs/screenshots/connect-config.png) | ![域用户管理](docs/screenshots/users.png) | ![OU 树](docs/screenshots/ou-tree.png) |
+
 ## 功能
 
 **连接配置**
