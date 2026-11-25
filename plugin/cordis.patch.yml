@@ -1,0 +1,8 @@
+- insert:
+    - id: ad-ldap-domain-manager
+      name: '@local/ad-ldap-domain-manager'
+      config:
+        marketApiBase: ''
+        ldapClientDriver: ''
+        # 未携带 actor 的请求使用的默认角色：admin / operator / viewer
+        defaultRole: 'admin'

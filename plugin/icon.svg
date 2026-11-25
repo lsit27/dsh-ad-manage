@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="AD LDAP Domain Manager">
+  <defs>
+    <linearGradient id="dm-bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#eef3f9"/>
+      <stop offset="1" stop-color="#d6e0ec"/>
+    </linearGradient>
+  </defs>
+  <rect x="2" y="2" width="60" height="60" rx="14" fill="url(#dm-bg)" stroke="#5b7189" stroke-width="2"/>
+  <!-- directory root -->
+  <rect x="24" y="8" width="16" height="11" rx="2.5" fill="#2f5f8f" stroke="#24405a" stroke-width="1.2"/>
+  <circle cx="32" cy="13.5" r="2" fill="#cfe0f2"/>
+  <!-- trunk -->
+  <path d="M32 19v8M16 30h32M16 30v4M32 30v4M48 30v4" fill="none" stroke="#5b7189" stroke-width="2.2" stroke-linecap="round"/>
+  <!-- leaves -->
+  <rect x="9" y="34" width="14" height="10" rx="2.5" fill="#6f8caa" stroke="#4a657f" stroke-width="1"/>
+  <rect x="25" y="34" width="14" height="10" rx="2.5" fill="#3d6f9e" stroke="#2b5276" stroke-width="1"/>
+  <rect x="41" y="34" width="14" height="10" rx="2.5" fill="#6f8caa" stroke="#4a657f" stroke-width="1"/>
+  <circle cx="16" cy="39" r="1.8" fill="#eaf1f8"/>
+  <circle cx="32" cy="39" r="1.8" fill="#eaf1f8"/>
+  <circle cx="48" cy="39" r="1.8" fill="#eaf1f8"/>
+  <!-- attribute lines -->
+  <path d="M12 45v6M20 45v6M28 45v6M36 45v6M44 45v6M52 45v6" stroke="#93a7bb" stroke-width="1.6" stroke-linecap="round"/>
+  <path d="M26 55h12" stroke="#2f5f8f" stroke-width="2.4" stroke-linecap="round"/>
+</svg>

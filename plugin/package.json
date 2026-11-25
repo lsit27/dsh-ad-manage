@@ -1,0 +1,46 @@
+{
+  "name": "@local/ad-ldap-domain-manager",
+  "version": "1.0.0",
+  "description": "AD/LDAP 域管理插件：可视化域连接配置与域对象全生命周期管理，支持 dsmarket 分发与在线更新。",
+  "private": true,
+  "type": "module",
+  "author": "DSH Market Contributor",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20",
+    "dsh": ">=0.1.5"
+  },
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "plugin.json",
+    "icon.svg",
+    "locale/*.json",
+    "src/*.js",
+    "ui/*.jsx",
+    "docs/*.md",
+    "docs/screenshots/*.svg",
+    "skills/**/*",
+    "CHANGELOG.md"
+  ],
+  "dsh": {
+    "manifestVersion": 1,
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true
+    }
+  },
+  "dependencies": {
+    "ldapjs": "^3.0.0"
+  }
+}

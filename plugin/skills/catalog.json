@@ -1,0 +1,13 @@
+[
+  {
+    "id": "ad-domain-management",
+    "name": "AD 域控管理技能",
+    "description": "按公司既定规则用 PowerShell（ActiveDirectory 模块）创建 OU/安全组/用户、计算机匹配迁移、禁用/删除安全策略。",
+    "version": "1.0.0",
+    "author": "DSH Market Contributor",
+    "path": "skills/ad-domain-management/SKILL.md",
+    "installTo": [".dsh/skills/ad-domain-management", ".agents/skills/ad-domain-management"],
+    "tags": ["AD", "域控", "PowerShell", "RSAT", "运维"],
+    "license": "MIT"
+  }
+]

@@ -1,0 +1,75 @@
+{
+  "schemaVersion": "1.0",
+  "pluginId": "ad-ldap-domain-manager",
+  "name": "AD/LDAP 域管理插件",
+  "displayName": { "zh": "AD/LDAP 域管理插件", "en": "AD/LDAP Domain Manager" },
+  "version": "1.0.0",
+  "author": {
+    "name": "DSH Market Contributor",
+    "homepage": "https://dsmarket.example.com/authors/dsh-market-contributor"
+  },
+  "summary": {
+    "zh": "可视化配置 AD/OpenLDAP 域连接，集中管理用户、计算机、安全组、OU 与 GPO，支持 dsmarket 一键安装与在线更新。",
+    "en": "Visually configure AD/OpenLDAP connections and manage users, computers, groups, OUs and GPOs, with dsmarket install and updates."
+  },
+  "description": {
+    "zh": "本插件与主系统解耦，独立安装启用。提供多套域连接的可视化配置与加密存储，域内对象的全生命周期管理（用户、计算机、安全组、OU、GPO），OU 树联动、全局检索、操作审计与高危操作防护。通过 dsmarket 实现搜索、下载、兼容性校验、在线更新、灰度发布、授权校验与版本回滚。",
+    "en": "A decoupled, independently installable plugin for DSH. It provides visual configuration and encrypted storage for multiple domain connections, full lifecycle management of directory objects (users, computers, security groups, OUs, GPOs), OU tree linkage, global search, operation audit and guardrails for risky actions. dsmarket integration covers search, download, compatibility checks, online updates, gray release, license verification and rollback."
+  },
+  "category": "系统运维 / 身份与访问管理",
+  "tags": ["AD", "LDAP", "Active Directory", "OpenLDAP", "域管理", "GPO", "IAM"],
+  "icon": "./icon.svg",
+  "screenshots": [
+    { "path": "./docs/screenshots/connect-config.svg", "caption": "域连接配置" },
+    { "path": "./docs/screenshots/users.svg", "caption": "域用户管理" },
+    { "path": "./docs/screenshots/ou-tree.svg", "caption": "OU 树与对象联动" }
+  ],
+  "versionHistory": [
+    { "version": "1.0.0", "date": "2026-11-23", "changelog": "首个 dsmarket 发布版本：域连接配置、五类域对象管理、审计日志、市场更新与回滚。" }
+  ],
+  "compatibility": {
+    "dsh": ">=0.1.5",
+    "manifestVersion": 1,
+    "platforms": ["web"],
+    "protocols": ["LDAP v3", "LDAPS", "StartTLS"],
+    "directories": ["Microsoft Active Directory", "OpenLDAP"]
+  },
+  "dependencies": [
+    { "name": "node", "version": ">=20", "required": true },
+    { "name": "ldapjs", "version": "^3.0.0", "required": false, "note": "未安装时自动使用内置 mock 驱动，可完成 UI 演示与联调。" }
+  ],
+  "license": {
+    "mode": "free",
+    "modes": ["free", "paid", "trial"],
+    "validation": "dsmarket"
+  },
+  "distribution": {
+    "channel": "stable",
+    "channels": ["stable", "gray"],
+    "offlineInstall": true,
+    "multiTenant": true,
+    "uninstallDataPolicy": ["keep", "purge"],
+    "delistedUsage": "allowed"
+  },
+  "stats": {
+    "downloads": 0,
+    "rating": 0,
+    "reviews": 0
+  },
+  "scenarios": [
+    "企业 AD 域账号的日常运维与批量管理",
+    "多分支机构多域的统一管理入口",
+    "OpenLDAP 目录服务的对象维护",
+    "安全组与分发组成员治理",
+    "OU 结构调整与 GPO 绑定关系梳理"
+  ],
+  "details": {
+    "features": "多域配置与一键测试、五类域对象全生命周期管理、OU 树联动、全局检索、审计日志、权限隔离、高危二次确认、市场在线更新与回滚。",
+    "installGuide": "在 dsmarket 搜索插件并一键安装，或导入离线安装包；安装后于插件设置中新增域连接并测试，具体见 INSTALL.md。",
+    "configGuide": "填写 LDAP 地址、端口、加密方式、绑定 DN/密码、基准 DN、超时与分页大小；敏感信息加密存储，详见 CONFIG.md。",
+    "releaseNotes": "见 CHANGELOG.md 与 versionHistory。",
+    "reviewUrl": "https://dsmarket.example.com/plugins/ad-ldap-domain-manager/reviews",
+    "supportUrl": "https://dsmarket.example.com/plugins/ad-ldap-domain-manager/support"
+  },
+  "updatedAt": "2026-11-23T10:49:56+08:00"
+}

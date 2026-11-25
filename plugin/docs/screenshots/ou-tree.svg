@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="600" viewBox="0 0 960 600">
+  <rect width="960" height="600" fill="#f4f6f9"/>
+  <rect x="0" y="0" width="960" height="56" fill="#1f4e79"/>
+  <text x="24" y="36" fill="#fff" font-family="sans-serif" font-size="20">AD/LDAP 域管理 · OU 树与对象联动</text>
+  <rect x="24" y="80" width="300" height="496" rx="8" fill="#fff" stroke="#d5dce5"/>
+  <text x="44" y="112" fill="#1f4e79" font-family="sans-serif" font-size="16" font-weight="bold">组织单元</text>
+  <g font-family="sans-serif" font-size="14" fill="#333">
+    <text x="44" y="152">▼ 📁 企业根目录</text>
+    <text x="68" y="186">▼ 📁 总部</text>
+    <text x="96" y="220" fill="#247bbf">　 📁 信息技术部</text>
+    <text x="96" y="254">　 📁 财务部</text>
+    <text x="68" y="288">▶ 📁 分支机构</text>
+  </g>
+  <rect x="340" y="80" width="596" height="496" rx="8" fill="#fff" stroke="#d5dce5"/>
+  <text x="364" y="112" fill="#1f4e79" font-family="sans-serif" font-size="16" font-weight="bold">信息技术部 · 下含对象</text>
+  <g font-family="sans-serif" font-size="14" fill="#444">
+    <text x="364" y="160">👤 张三　用户</text>
+    <text x="364" y="196">💻 PC-01　计算机</text>
+    <text x="364" y="232">👥 IT 团队　组</text>
+  </g>
+  <rect x="364" y="280" width="120" height="34" rx="6" fill="#247bbf"/><text x="382" y="302" fill="#fff" font-family="sans-serif" font-size="13">新建 OU</text>
+  <rect x="496" y="280" width="120" height="34" rx="6" fill="#eef1f5" stroke="#c8d0da"/><text x="514" y="302" fill="#333" font-family="sans-serif" font-size="13">重命名</text>
+  <rect x="628" y="280" width="120" height="34" rx="6" fill="#eef1f5" stroke="#c8d0da"/><text x="646" y="302" fill="#333" font-family="sans-serif" font-size="13">移动</text>
+  <text x="364" y="540" fill="#666" font-family="sans-serif" font-size="13">点击左侧 OU，右侧列表自动过滤该 OU 下全部对象</text>
+</svg>
