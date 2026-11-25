@@ -39,6 +39,7 @@ function pick(row, extra = {}) {
   return {
     id: s(row.id || attr(row, 'uid')),
     dn: s(row.dn),
+    dnRaw: s(row.dnRaw || row.dn),
     name: s(attr(row, 'cn') || attr(row, 'ou') || attr(row, 'name')),
     ...extra,
   };
@@ -208,6 +209,26 @@ export function createDirectoryService({ ldap, store, auditor, rbac } = {}) {
   // 写操作必须用服务器原始 DN（转义形式）；解码后的中文 DN 只用于显示，
   // 直接写回 AD 会报 No Such Object。dnRaw 由 serializeEntry 保留。
   function writeDn(row) { return (row && row.dnRaw) || (row && row.dn) || ''; }
+  // OU/GPO 的 id 可能是对象（来自 UI params）或字符串（旧调用），统一取 id
+  function idOf(v) { return (v && typeof v === 'object') ? (v.id || v.dn || v.dnRaw) : v; }
+
+  // 根据 UI 传入对象精确定位 AD 对象：优先 dnRaw，再 id/dn，最后按登录名/cn 兜底。
+  async function findForWrite(p, kind) {
+    if (!p) return null;
+    if (typeof p === 'string') p = { id: p, dnRaw: p, dn: p };
+    // 优先用纯 ASCII 的登录名/cn 查找（工号如 200130），彻底避开中文 DN 转义问题。
+    const nameKey = kind === 'user' ? (p.sAMAccountName || p.username || p.uid) : (p.name || p.cn);
+    if (nameKey) {
+      const f = kind === 'user' ? 'sAMAccountName' : 'cn';
+      try { const row = await ldap.findByField(kind, f, nameKey); if (row) return row; } catch (e) { /* next */ }
+    }
+    // 再用 DN 定位（dnRaw 优先）
+    for (const c of [p.dnRaw, p.id, p.dn]) {
+      if (!c) continue;
+      try { const row = await ldap.findByField(kind, 'id', c); if (row) return row; } catch (e) { /* next */ }
+    }
+    return null;
+  }
   async function _list(kind, q) {
     const selectedBase = ouDnOf(getBaseDN(), q);
     const filter = buildFilter(kind, q);
@@ -301,7 +322,7 @@ export function createDirectoryService({ ldap, store, auditor, rbac } = {}) {
     async getUser(id, actor) {
       return call(async () => {
         guard(actor || 'viewer', ACTIONS.OBJECT_READ);
-        return ok(userView(await findDn('user', 'id', id)));
+        return ok(userView(await findForWrite(id, 'user')));
       });
     },
     async createUser(u = {}, actor) {
@@ -338,7 +359,7 @@ export function createDirectoryService({ ldap, store, auditor, rbac } = {}) {
     async updateUser(u = {}, actor) {
       return call(async () => {
         guard(actor, ACTIONS.OBJECT_WRITE);
-        const row = await findDn('user', 'id', u.id || u.dn);
+        const row = await findForWrite(u, 'user');
         const map = { name: 'cn', cn: 'cn', username: 'sAMAccountName', sAMAccountName: 'sAMAccountName', upn: 'userPrincipalName', userPrincipalName: 'userPrincipalName', displayName: 'displayName', givenName: 'givenName', sn: 'sn', email: 'mail', mail: 'mail', mobile: 'mobile', employeeID: 'employeeID', employeeNumber: 'employeeNumber', department: 'department', company: 'company', title: 'title', telephoneNumber: 'telephoneNumber', physicalDeliveryOfficeName: 'physicalDeliveryOfficeName', manager: 'manager', description: 'description' };
         const patch = {};
         for (const [k, v] of Object.entries(u)) if (map[k] && v !== undefined) patch[map[k]] = v;
@@ -352,7 +373,7 @@ export function createDirectoryService({ ldap, store, auditor, rbac } = {}) {
         guard(actor, ACTIONS.PASSWORD_RESET);
         if (!confirmed(confirmToken)) return confirmError();
         if (!password || String(password).length < 8) return fail('PASSWORD_POLICY', '密码不符合域密码策略：至少 8 位。');
-        const row = await findDn('user', 'id', id);
+        const row = await findForWrite(id, 'user');
         await ldap.modifyPassword(writeDn(row), password, confirmToken);
         write({ actor, action: 'directory.resetPassword', target: row.dn, result: 'success', detail: { id } });
         return ok({ id, changed: true });
@@ -361,7 +382,7 @@ export function createDirectoryService({ ldap, store, auditor, rbac } = {}) {
     async toggleUser(id, enabled, actor) {
       return call(async () => {
         guard(actor, ACTIONS.OBJECT_WRITE);
-        const row = await findDn('user', 'id', id);
+        const row = await findForWrite(id, 'user');
         await ldap.changeState(writeDn(row), !!enabled);
         write({ actor, action: 'directory.toggleUser', target: row.dn, result: 'success', detail: { id, enabled: !!enabled } });
         return ok({ id, enabled: !!enabled });
@@ -370,7 +391,7 @@ export function createDirectoryService({ ldap, store, auditor, rbac } = {}) {
     async unlockUser(id, actor) {
       return call(async () => {
         guard(actor, ACTIONS.OBJECT_WRITE);
-        const row = await findDn('user', 'id', id);
+        const row = await findForWrite(id, 'user');
         await ldap.unlock(writeDn(row));
         write({ actor, action: 'directory.unlockUser', target: row.dn, result: 'success', detail: { id } });
         return ok({ id, unlocked: true });
@@ -379,7 +400,7 @@ export function createDirectoryService({ ldap, store, auditor, rbac } = {}) {
     async moveUser(id, ouDn, actor) {
       return call(async () => {
         guard(actor, ACTIONS.OBJECT_WRITE);
-        const row = await findDn('user', 'id', id);
+        const row = await findForWrite(id, 'user');
         const dest = ouDn && ouDn.dn ? ouDn.dn : ouDn;
         await ldap.move(writeDn(row), dest);
         write({ actor, action: 'directory.moveUser', target: row.dn, result: 'success', detail: { id, ouDn: dest } });
@@ -390,7 +411,7 @@ export function createDirectoryService({ ldap, store, auditor, rbac } = {}) {
       return call(async () => {
         guard(actor, ACTIONS.OBJECT_DELETE);
         if (!confirmed(confirmToken)) return confirmError();
-        const row = await findDn('user', 'id', id);
+        const row = await findForWrite(id, 'user');
         await ldap.del(writeDn(row), confirmToken);
         write({ actor, action: 'directory.deleteUser', target: row.dn, result: 'success', detail: { id } });
         return ok({ id, deleted: true });
@@ -399,7 +420,7 @@ export function createDirectoryService({ ldap, store, auditor, rbac } = {}) {
     async getUserGroups(id, actor) {
       return call(async () => {
         guard(actor || 'viewer', ACTIONS.OBJECT_READ);
-        const row = await findDn('user', 'id', id);
+        const row = await findForWrite(id, 'user');
         const dns = (attr(row, 'memberOf') || []).map(String);
         const items = dns.map(dn => ({ id: dn, dn, name: dn.split(',')[0] }));
         return ok({ items, total: items.length });
@@ -426,7 +447,7 @@ export function createDirectoryService({ ldap, store, auditor, rbac } = {}) {
     async updateComputer(c = {}, actor) {
       return call(async () => {
         guard(actor, ACTIONS.OBJECT_WRITE);
-        const row = await findDn('computer', 'id', c.id || c.dn);
+        const row = await findForWrite(c, 'computer');
         const map = { name: 'cn', cn: 'cn', dnsHostName: 'dNSHostName', dnshostname: 'dNSHostName', operatingSystem: 'operatingSystem', os: 'operatingSystem', description: 'description' };
         const patch = {};
         for (const [k, v] of Object.entries(c)) if (map[k] && v !== undefined) patch[map[k]] = v;
@@ -438,13 +459,13 @@ export function createDirectoryService({ ldap, store, auditor, rbac } = {}) {
     async getComputer(id, actor) {
       return call(async () => {
         guard(actor || 'viewer', ACTIONS.OBJECT_READ);
-        return ok(computerView(await findDn('computer', 'id', id)));
+        return ok(computerView(await findForWrite(id, 'computer')));
       });
     },
     async moveComputer(id, ouDn, actor) {
       return call(async () => {
         guard(actor, ACTIONS.OBJECT_WRITE);
-        const row = await findDn('computer', 'id', id);
+        const row = await findForWrite(id, 'computer');
         const dest = ouDn && ouDn.dn ? ouDn.dn : ouDn;
         await ldap.move(writeDn(row), dest);
         write({ actor, action: 'directory.moveComputer', target: row.dn, result: 'success', detail: { id, ouDn: dest } });
@@ -455,7 +476,7 @@ export function createDirectoryService({ ldap, store, auditor, rbac } = {}) {
       return call(async () => {
         guard(actor, ACTIONS.OBJECT_DELETE);
         if (!confirmed(confirmToken)) return confirmError();
-        const row = await findDn('computer', 'id', id);
+        const row = await findForWrite(id, 'computer');
         await ldap.del(writeDn(row), confirmToken);
         write({ actor, action: 'directory.deleteComputer', target: row.dn, result: 'success', detail: { id } });
         return ok({ id, deleted: true });
@@ -464,7 +485,7 @@ export function createDirectoryService({ ldap, store, auditor, rbac } = {}) {
     async toggleComputer(id, enabled, actor) {
       return call(async () => {
         guard(actor, ACTIONS.OBJECT_WRITE);
-        const row = await findDn('computer', 'id', id);
+        const row = await findForWrite(id, 'computer');
         await ldap.changeState(writeDn(row), !!enabled);
         write({ actor, action: 'directory.toggleComputer', target: row.dn, result: 'success', detail: { id, enabled: !!enabled } });
         return ok({ id, enabled: !!enabled });
@@ -491,7 +512,7 @@ export function createDirectoryService({ ldap, store, auditor, rbac } = {}) {
     async updateGroup(g = {}, actor) {
       return call(async () => {
         guard(actor, ACTIONS.OBJECT_WRITE);
-        const row = await findDn('group', 'id', g.id || g.dn);
+        const row = await findForWrite(g, 'group');
         const map = { name: 'cn', cn: 'cn', samAccountName: 'sAMAccountName', description: 'description', scope: 'groupScope' };
         const patch = {};
         for (const [k, v] of Object.entries(g)) if (map[k] && v !== undefined) patch[map[k]] = v;
@@ -503,17 +524,17 @@ export function createDirectoryService({ ldap, store, auditor, rbac } = {}) {
     async getGroup(id, actor) {
       return call(async () => {
         guard(actor || 'viewer', ACTIONS.OBJECT_READ);
-        return ok(groupView(await findDn('group', 'id', id)));
+        return ok(groupView(await findForWrite(id, 'group')));
       });
     },
     async addGroupMembers(id, members, actor) {
       return call(async () => {
         guard(actor, ACTIONS.OBJECT_WRITE);
-        const group = await findDn('group', 'id', id);
+        const group = await findForWrite(id, 'group');
         const list = Array.isArray(members) ? members : [members];
         for (const m of list) {
           const dn = typeof m === 'string' ? m
-            : (m.dn || (await findDn('user', 'id', m.id || m.username)).dn);
+            : (m.dn || (await findForWrite(m, 'user')).dn);
           await ldap.addGroupMember(writeDn(group), dn);
         }
         write({ actor, action: 'directory.addGroupMembers', target: group.dn, result: 'success', detail: { id, members: list } });
@@ -523,11 +544,11 @@ export function createDirectoryService({ ldap, store, auditor, rbac } = {}) {
     async removeGroupMembers(id, members, actor) {
       return call(async () => {
         guard(actor, ACTIONS.OBJECT_WRITE);
-        const group = await findDn('group', 'id', id);
+        const group = await findForWrite(id, 'group');
         const list = Array.isArray(members) ? members : [members];
         for (const m of list) {
           const dn = typeof m === 'string' ? m
-            : (m.dn || (await findDn('user', 'id', m.id || m.username)).dn);
+            : (m.dn || (await findForWrite(m, 'user')).dn);
           await ldap.removeGroupMember(writeDn(group), dn);
         }
         write({ actor, action: 'directory.removeGroupMembers', target: group.dn, result: 'success', detail: { id, members: list } });
@@ -538,7 +559,7 @@ export function createDirectoryService({ ldap, store, auditor, rbac } = {}) {
       return call(async () => {
         guard(actor, ACTIONS.OBJECT_DELETE);
         if (!confirmed(confirmToken)) return confirmError();
-        const row = await findDn('group', 'id', id);
+        const row = await findForWrite(id, 'group');
         await ldap.del(writeDn(row), confirmToken);
         write({ actor, action: 'directory.deleteGroup', target: row.dn, result: 'success', detail: { id } });
         return ok({ id, deleted: true });
@@ -547,7 +568,7 @@ export function createDirectoryService({ ldap, store, auditor, rbac } = {}) {
     async listGroupMembers(id, actor) {
       return call(async () => {
         guard(actor || 'viewer', ACTIONS.OBJECT_READ);
-        const group = await findDn('group', 'id', id);
+        const group = await findForWrite(id, 'group');
         const items = ldap.listGroupMembers ? await ldap.listGroupMembers(writeDn(group)) : [];
         return ok({ items, total: items.length });
       });
@@ -567,7 +588,7 @@ export function createDirectoryService({ ldap, store, auditor, rbac } = {}) {
     async renameOU(id, name, actor) {
       return call(async () => {
         guard(actor, ACTIONS.OBJECT_WRITE);
-        const created = await ldap.renameOU(id, name);
+        const created = await ldap.renameOU(idOf(id), name);
         write({ actor, action: 'directory.renameOU', target: created.dn, result: 'success', detail: { id, name } });
         return ok(created);
       });
@@ -576,7 +597,7 @@ export function createDirectoryService({ ldap, store, auditor, rbac } = {}) {
       return call(async () => {
         guard(actor, ACTIONS.OBJECT_WRITE);
         const parentId = parent && parent.id ? parent.id : parent;
-        const moved = await ldap.moveOU(id, parentId);
+        const moved = await ldap.moveOU(idOf(id), parentId);
         write({ actor, action: 'directory.moveOU', target: moved.dn, result: 'success', detail: { id, parentId } });
         return ok(moved);
       });
@@ -585,7 +606,7 @@ export function createDirectoryService({ ldap, store, auditor, rbac } = {}) {
       return call(async () => {
         guard(actor, ACTIONS.OBJECT_DELETE);
         if (!confirmed(confirmToken)) return confirmError();
-        const ou = await ldap.deleteOU(id, confirmToken);
+        const ou = await ldap.deleteOU(idOf(id), confirmToken);
         write({ actor, action: 'directory.deleteOU', target: ou.dn, result: 'success', detail: { id } });
         return ok({ id, deleted: true });
       });
@@ -593,7 +614,7 @@ export function createDirectoryService({ ldap, store, auditor, rbac } = {}) {
     async listOUObjects(id, q = {}, actor) {
       return call(async () => {
         guard(actor || 'viewer', ACTIONS.OBJECT_READ);
-        const rows = await ldap.listOUObjects(id);
+        const rows = await ldap.listOUObjects(idOf(id));
         let items = rows.map(row => ({
           dn: s(row.dn), id: s(row.id || row.dn),
           name: s(first(attr(row, 'cn')) || first(attr(row, 'ou'))),
@@ -608,13 +629,13 @@ export function createDirectoryService({ ldap, store, auditor, rbac } = {}) {
     async getGPO(id, actor) {
       return call(async () => {
         guard(actor || 'viewer', ACTIONS.OBJECT_READ);
-        return ok(gpoView(await ldap.getGPO(id)));
+        return ok(gpoView(await ldap.getGPO(idOf(id))));
       });
     },
     async toggleGPO(id, enabled, actor) {
       return call(async () => {
         guard(actor, ACTIONS.GPO_WRITE);
-        const g = await ldap.toggleGPO(id, !!enabled);
+        const g = await ldap.toggleGPO(idOf(id), !!enabled);
         write({ actor, action: 'directory.toggleGPO', target: s(g.dn || id), result: 'success', detail: { id, enabled: !!enabled } });
         return ok({ id, enabled: !!enabled });
       });
@@ -623,7 +644,7 @@ export function createDirectoryService({ ldap, store, auditor, rbac } = {}) {
       return call(async () => {
         guard(actor, ACTIONS.GPO_WRITE);
         const ouId = ou && ou.id ? ou.id : ou;
-        const g = await ldap.bindGPO(id, ouId);
+        const g = await ldap.bindGPO(idOf(id), ouId);
         write({ actor, action: 'directory.bindGPO', target: s(g.dn || id), result: 'success', detail: { id, ouId } });
         return ok({ id, ouId, linkedOUs: g.linkedOUs });
       });
@@ -632,7 +653,7 @@ export function createDirectoryService({ ldap, store, auditor, rbac } = {}) {
       return call(async () => {
         guard(actor, ACTIONS.GPO_WRITE);
         const ouId = ou && ou.id ? ou.id : ou;
-        const g = await ldap.unbindGPO(id, ouId);
+        const g = await ldap.unbindGPO(idOf(id), ouId);
         write({ actor, action: 'directory.unbindGPO', target: s(g.dn || id), result: 'success', detail: { id, ouId } });
         return ok({ id, ouId, linkedOUs: g.linkedOUs });
       });

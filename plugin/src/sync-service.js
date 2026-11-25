@@ -184,6 +184,10 @@ export function createSyncService({ store, directory, dataDir, logger } = {}) {
     const r = store.read(key, [])
     if (!r.ok) return r
     let items = Array.isArray(r.data) ? r.data : []
+    // 兼容旧缓存：历史同步数据没有 dnRaw 字段，写操作会失败。
+    // 这里补齐 dnRaw = dn（旧缓存的 dn 已是可用 DN），保证升级后无需重新同步即可操作。
+    items = items.map(row => (row && typeof row === 'object' && !row.dnRaw && row.dn)
+      ? { ...row, dnRaw: row.dn } : row)
     // 用户缓存的应用层保险：剔除可能混入的计算机对象。
     // 计算机账号特征：objectClass 含 computer、UAC 0x2000 位、sAMAccountName 以 $ 结尾。
     if (kind === 'users') {
