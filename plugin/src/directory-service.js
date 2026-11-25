@@ -247,24 +247,42 @@ export function createDirectoryService({ ldap, store, auditor, rbac } = {}) {
   async function _list(kind, q) {
     const selectedBase = ouDnOf(getBaseDN(), q);
     const filter = buildFilter(kind, q);
+    const wantOu = q.ouDn || (q.filters && q.filters.ouDN) || null;
     let result;
     let usedBase = selectedBase;
+    let needMemoryFilter = false;
     try {
       result = await ldap.searchPaged(selectedBase, { filter, page: q.page, pageSize: q.pageSize });
     } catch (err) {
-      // 用户填的 baseDN（如含中文 OU）在 AD 中可能因 DN 写法差异导致 NO_SUCH_OBJECT。
-      // 自动回退到根 DC 重试，保证能列出对象；OU 过滤仍由 q.filters 处理。
+      // 中文 OU 作搜索基准在部分 AD 上会 NO_SUCH_OBJECT：回退根 DC 拉全量，
+      // 但必须记录 needMemoryFilter，随后按选中 OU 做子树过滤，
+      // 否则会把整个域的对象都当成本 OU 的明细（这正是"研发部计算机明细错误"的根因）。
       const rootDn = rootDnOf(selectedBase);
       if (err && err.code === 'NO_SUCH_OBJECT' && rootDn && rootDn.toLowerCase() !== String(selectedBase).toLowerCase()) {
-        result = await ldap.searchPaged(rootDn, { filter, page: q.page, pageSize: q.pageSize });
+        result = await ldap.searchPaged(rootDn, { filter, page: 1, pageSize: 1000 });
         usedBase = rootDn;
+        needMemoryFilter = true;
       } else throw err;
     }
     let rows = result.items;
-    let total = result.total;
     if (q.filters && q.filters.enabled !== undefined && kind !== 'group') {
       rows = rows.filter(r => boolFromUac(attr(r, 'userAccountControl')) === !!q.filters.enabled);
-      total = rows.length;
+    }
+    // 选中 OU 时统一做子树过滤（dn 等于该 OU 或以 ",ou" 结尾）
+    if (wantOu) {
+      const base = String(wantOu).toLowerCase();
+      rows = rows.filter(r => {
+        const dn = String(r.dn || '').toLowerCase();
+        return dn === base || dn.endsWith(',' + base);
+      });
+    }
+    const total = rows.length;
+    if (needMemoryFilter) {
+      // 内存过滤后重新分页
+      const page = Math.max(1, Number(q.page) || 1);
+      const pageSize = Math.min(Math.max(1, Number(q.pageSize) || 20), 1000);
+      const start = (page - 1) * pageSize;
+      return { items: rows.slice(start, start + pageSize), total, page, pageSize, baseDnUsed: usedBase, filtered: true };
     }
     return { items: rows, total, page: result.page, pageSize: result.pageSize, baseDnUsed: usedBase };
   }
@@ -329,7 +347,43 @@ export function createDirectoryService({ ldap, store, auditor, rbac } = {}) {
         let items = (ldap.listGPO ? await ldap.listGPO() : []).map(gpoView);
         if (q.keyword) items = items.filter(x => x.name.toLowerCase().includes(String(q.keyword).toLowerCase()));
         if (q.filters && q.filters.enabled !== undefined) items = items.filter(x => x.enabled === !!q.filters.enabled);
+        // 选中 OU 时，只显示与它相关的策略：直接链接到它 + 从祖先 OU 继承下来的。
+        // 与 AD 的"链接/继承"语义一致，便于在组织树里查看某 OU 实际生效的策略。
+        if (q.ouDn) {
+          const ou = String(q.ouDn).toLowerCase();
+          const ancestors = [];
+          let cur = ou;
+          while (cur) {
+            ancestors.push(cur);
+            const i = cur.indexOf(',');
+            if (i < 0) break;
+            cur = cur.slice(i + 1);
+          }
+          items = items.map(g => {
+            const links = Array.isArray(g.gpoLinks) ? g.gpoLinks : [];
+            const direct = links.find(l => String(l.ou || '').toLowerCase() === ou);
+            if (direct) return { ...g, scopeType: 'direct', enforced: !!direct.enforced, inheritanceBlocked: !!direct.inheritanceBlocked };
+            const inherited = links.find(l => ancestors.includes(String(l.ou || '').toLowerCase()));
+            if (inherited) return { ...g, scopeType: 'inherited', inheritedFrom: inherited.ou, enforced: !!inherited.enforced };
+            return null;
+          }).filter(Boolean);
+        }
         return ok(paginate(items, q));
+      });
+    },
+
+    async updateGPO(g = {}, actor) {
+      return call(async () => {
+        guard(actor, ACTIONS.GPO_WRITE);
+        const id = idOf(g);
+        const patch = {};
+        const name = g.name || g.displayName;
+        if (name) patch.displayName = String(name);
+        if (g.description !== undefined) patch.description = String(g.description || '');
+        if (!Object.keys(patch).length) return ok({ id, unchanged: true });
+        const res = ldap.updateGPO ? await ldap.updateGPO(id, patch) : (await ldap.modifyAttributes(id, patch), { dn: String(id) });
+        write({ actor, action: 'directory.updateGPO', target: String(id), result: 'success', detail: patch });
+        return ok({ id, ...patch, dn: res && res.dn });
       });
     },
 

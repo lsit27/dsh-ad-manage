@@ -455,7 +455,18 @@ class MockLdapClient {
     if (!ou) throw ldapError('NO_SUCH_OBJECT', String(id));
     return mockAllEntries(this.data).filter(e => parentDn(e.dn).toLowerCase() === ou.dn.toLowerCase()).map(e => mockAttrsOf(e));
   }
-  async listGPO() { this._assertBound(); return this.data.gpos.map(g => ({ ...g, linkedOUs: [...g.linkedOUs] })); }
+  async listGPO() {
+    this._assertBound();
+    // 把 linkedOUs(OU id) 转成 gpoLinks(OU DN)，与真实驱动结构一致，
+    // 这样按 OU 过滤/继承判断在 mock 下也能工作。
+    return this.data.gpos.map(g => {
+      const links = (g.linkedOUs || []).map(ouId => {
+        const ou = this.data.ous.find(o => o.id === ouId);
+        return { ou: ou ? ou.dn : ouId, enforced: false, inheritanceBlocked: false };
+      });
+      return { ...g, linkedOUs: [...(g.linkedOUs || [])], gpoLinks: links };
+    });
+  }
   async createGPO(name) {
     this._assertWrite();
     const id = `gpo-${randomUUID()}`;
@@ -473,6 +484,14 @@ class MockLdapClient {
     if (g.linkedOUs && g.linkedOUs.length) throw ldapError('ENTRY_IN_USE', 'GPO 仍链接到 OU，请先解绑');
     this.data.gpos.splice(idx, 1);
     return { ...g };
+  }
+  async updateGPO(id, patch = {}) {
+    this._assertWrite();
+    const g = this.data.gpos.find(x => x.id === id);
+    if (!g) throw ldapError('NO_SUCH_OBJECT', String(id));
+    if (patch.displayName !== undefined) g.name = String(patch.displayName);
+    if (patch.description !== undefined) g.description = String(patch.description);
+    return { ...g, linkedOUs: [...(g.linkedOUs || [])] };
   }
   async getGPO(id) {
     this._assertBound();
@@ -825,6 +844,15 @@ class LdapjsLdapClient {
       }
     }
     return this.del(id);
+  }
+  async updateGPO(id, patch = {}) {
+    const clean = {};
+    if (patch.displayName !== undefined) clean.displayName = String(patch.displayName);
+    if (patch.description !== undefined) clean.description = String(patch.description || '');
+    if (!Object.keys(clean).length) return { dn: String(id) };
+    await this.modifyAttributes(id, clean);
+    const rows = await this.search(id, { scope: 'base' });
+    return rows[0] || { dn: String(id) };
   }
   async findByField(kind, field, value) {
     const oc = kind === 'user' ? 'user' : kind === 'computer' ? 'computer' : 'group';

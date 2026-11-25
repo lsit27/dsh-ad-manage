@@ -75,6 +75,9 @@
         { key: 'name', titleKey: 'objects.col.name', render: function (r) { return r.name || r.displayName || ''; } },
         { key: 'enabled', titleKey: 'objects.col.gpoStatus', render: function (r) { return flag(r, 'enabled', true); } },
         { key: 'links', titleKey: 'objects.col.gpoLinks', render: function (r) {
+          // 选中 OU 时展示作用域：直接链接 / 继承自某 OU
+          if (r.scopeType === 'direct') return t('objects.scope.direct') + (r.enforced ? ' [强制]' : '');
+          if (r.scopeType === 'inherited') return t('objects.scope.inherited') + ' ' + ouOfDn(r.inheritedFrom || '');
           var links = Array.isArray(r.gpoLinks) && r.gpoLinks.length ? r.gpoLinks : (Array.isArray(r.linkedOUs) ? r.linkedOUs.map(function (u) { return { ou: u }; }) : []);
           if (!links.length) return '—';
           return links.map(function (l) {
@@ -354,6 +357,10 @@
       setDialog({ kind: 'edit', row: row });
     }
 
+    function openGpoEdit(row) {
+      setDialog({ kind: 'gpoEdit', row: row });
+    }
+
     function openDelete(row) {
       setDialog({ kind: 'delete', row: row, danger: true });
     }
@@ -442,9 +449,11 @@
         acts.push(btn('move', t('objects.action.move'), function () { openMove(row); }));
         acts.push(btn('delete', t('common.delete'), function () { openDelete(row); }, 'danger'));
       } else if (typeKey === 'gpos') {
+        acts.push(btn('edit', t('common.edit'), function () { openGpoEdit(row); }));
         acts.push(btn('toggle', t('objects.action.toggle'), function () { openToggle(row); }));
         acts.push(btn('bind', t('objects.action.bindGpo'), function () { openBindGpo(row); }));
         acts.push(btn('unbind', t('objects.action.unbindGpo'), function () { openUnbindGpo(row); }, 'danger'));
+        acts.push(btn('delete', t('common.delete'), function () { openDelete(row); }, 'danger'));
       }
       return h('div', { className: 'dm-row-actions' }, acts);
     }
@@ -644,6 +653,7 @@
         return t('common.edit');
       }
       if (kind === 'rename') return t('objects.renameOU');
+      if (kind === 'gpoEdit') return t('objects.editGpo');
       if (kind === 'move') return t('objects.move');
       if (kind === 'resetPw') return t('objects.resetPw');
       if (kind === 'groups') return t('objects.groups');
@@ -716,6 +726,7 @@
           else if (typeKey === 'computers') props.submit('domain-manager.directory.createComputer', p, 'objects.operationOk');
           else if (typeKey === 'groups') props.submit('domain-manager.directory.createGroup', p, 'objects.operationOk');
           else if (typeKey === 'ous') props.submit('domain-manager.directory.createOU', p, 'objects.operationOk');
+          else if (typeKey === 'gpos') props.submit('domain-manager.directory.createGPO', Object.assign(p, { name: form.name }), 'objects.operationOk');
           break;
         case 'edit':
           if (typeKey === 'users') props.submit('domain-manager.directory.updateUser', p, 'objects.operationOk');
@@ -753,9 +764,13 @@
             typeKey === 'users' ? 'domain-manager.directory.deleteUser' :
               typeKey === 'computers' ? 'domain-manager.directory.deleteComputer' :
                 typeKey === 'groups' ? 'domain-manager.directory.deleteGroup' :
-                  typeKey === 'ous' ? 'domain-manager.directory.deleteOU' : 'domain-manager.directory.deleteUser',
+                  typeKey === 'ous' ? 'domain-manager.directory.deleteOU' :
+                    typeKey === 'gpos' ? 'domain-manager.directory.deleteGPO' : 'domain-manager.directory.deleteUser',
             Object.assign(p, { id: id }), 'objects.operationOk'
           );
+          break;
+        case 'gpoEdit':
+          props.submit('domain-manager.directory.updateGPO', Object.assign(p, { id: id, name: form.name, description: form.description }), 'objects.operationOk');
           break;
         case 'groups':
           props.submit('domain-manager.directory.addGroupMembers', Object.assign(p, { id: id, members: splitLines(form.membersText) }), 'objects.operationOk');
@@ -902,6 +917,15 @@
       body = h(C.Field, { id: 'dm-newname', label: t('objects.field.newName'), required: true },
         h(C.Input, { id: 'dm-newname', value: form.newName || '', onChange: function (v) { set('newName', v); } })
       );
+    } else if (kind === 'gpoEdit') {
+      body = h('div', null,
+        h(C.Field, { id: 'dm-gpo-name', label: t('objects.field.name'), required: true },
+          h(C.Input, { id: 'dm-gpo-name', value: form.name || '', onChange: function (v) { set('name', v); } })
+        ),
+        h(C.Field, { id: 'dm-gpo-desc', label: t('objects.col.description') },
+          h(C.Input, { id: 'dm-gpo-desc', value: form.description || '', onChange: function (v) { set('description', v); } })
+        )
+      );
     } else {
       // create / edit
       var fields = [];
@@ -937,6 +961,8 @@
         f('name', 'objects.field.name', { required: true });
         f('sam', 'objects.field.sam');
       } else if (typeKey === 'ous') {
+        f('name', 'objects.field.name', { required: true });
+      } else if (typeKey === 'gpos') {
         f('name', 'objects.field.name', { required: true });
       }
       f('description', 'objects.field.description');
