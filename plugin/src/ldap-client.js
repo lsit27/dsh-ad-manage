@@ -456,6 +456,24 @@ class MockLdapClient {
     return mockAllEntries(this.data).filter(e => parentDn(e.dn).toLowerCase() === ou.dn.toLowerCase()).map(e => mockAttrsOf(e));
   }
   async listGPO() { this._assertBound(); return this.data.gpos.map(g => ({ ...g, linkedOUs: [...g.linkedOUs] })); }
+  async createGPO(name) {
+    this._assertWrite();
+    const id = `gpo-${randomUUID()}`;
+    const guid = `{${randomUUID().toUpperCase()}}`;
+    const dn = `cn=${guid},cn=Policies,dc=example,dc=com`;
+    const g = { id, dn, name, enabled: true, flags: '0', linkedOUs: [], gpoLinks: [], description: '' };
+    this.data.gpos.push(g);
+    return { ...g, linkedOUs: [] };
+  }
+  async deleteGPO(id) {
+    this._assertWrite();
+    const idx = this.data.gpos.findIndex(x => x.id === id);
+    if (idx < 0) throw ldapError('NO_SUCH_OBJECT', String(id));
+    const g = this.data.gpos[idx];
+    if (g.linkedOUs && g.linkedOUs.length) throw ldapError('ENTRY_IN_USE', 'GPO 仍链接到 OU，请先解绑');
+    this.data.gpos.splice(idx, 1);
+    return { ...g };
+  }
   async getGPO(id) {
     this._assertBound();
     const g = this.data.gpos.find(x => x.id === id);
@@ -703,16 +721,52 @@ class LdapjsLdapClient {
     const root = rootDnOf(this.cfg.baseDN) || this.cfg.baseDN;
     // AD 中 GPO 实际位于 CN=Policies,CN=System,<root>；先试标准路径，失败再试根下直接路径
     const candidates = [`cn=Policies,cn=System,${root}`, `cn=Policies,${root}`];
+    let rows = null;
     let lastErr = null;
     for (const base of candidates) {
       try {
-        return await this.search(base, { filter: '(objectClass=groupPolicyContainer)', attributes: ['cn', 'displayName', 'flags'] });
+        rows = await this.search(base, { filter: '(objectClass=groupPolicyContainer)', attributes: ['cn', 'displayName', 'flags', 'gPCFileSysPath', 'whenCreated'] });
+        break;
       } catch (err) {
         lastErr = err;
         if (!err || err.code !== 'NO_SUCH_OBJECT') throw err;
       }
     }
-    throw lastErr || ldapError('NO_SUCH_OBJECT');
+    if (!rows) throw lastErr || ldapError('NO_SUCH_OBJECT');
+
+    // 读取所有 OU/域根的 gPLink，构建 GPO -> 链接 OU 映射（含继承来源）。
+    // gPLink 值形如 "[LDAP://cn={GUID},cn=Policies,...;0][LDAP://...;2]"，;0=强制, ;2=禁用继承
+    const linkMap = {};
+    try {
+      const ouRows = await this.search(root, {
+        filter: '(|(objectClass=organizationalUnit)(objectClass=domainDNS))',
+        attributes: ['ou', 'dc', 'gPLink', 'gPOptions'],
+      });
+      for (const ou of ouRows) {
+        const links = asArray(ou.gPLink);
+        for (const raw of links) {
+          const m = /LDAP:\/\/([^;]+);(\d)/i.exec(String(raw));
+          if (!m) continue;
+          const gpoDn = m[1];
+          if (!linkMap[gpoDn.toLowerCase()]) linkMap[gpoDn.toLowerCase()] = [];
+          linkMap[gpoDn.toLowerCase()].push({
+            ou: ou.dn,
+            enforced: m[2] === '0',
+            inheritanceBlocked: m[2] === '2',
+          });
+        }
+      }
+    } catch (e) { /* 读不到 gPLink 时链接信息留空 */ }
+
+    return rows.map(g => {
+      const dn = g.dn && g.dn.toString ? g.dn.toString() : String(g.dn || '');
+      const links = linkMap[dn.toLowerCase()] || [];
+      return {
+        ...g,
+        linkedOUs: links.map(x => x.ou),
+        gpoLinks: links,
+      };
+    });
   }
   async getGPO(id) {
     const rows = await this.search(id, { scope: 'base' });
@@ -740,6 +794,38 @@ class LdapjsLdapClient {
   }
   async bindGPO(id, ou) { return this.modify(ou, [{ operation: 'add', modification: this._attr('gPLink', [`[LDAP://${id};0]`]) }]); }
   async unbindGPO(id, ou) { return this.modify(ou, [{ operation: 'delete', modification: this._attr('gPLink', [`[LDAP://${id};0]`]) }]); }
+  async createGPO(name) {
+    const root = rootDnOf(this.cfg.baseDN) || this.cfg.baseDN;
+    const guid = `{${randomUUID().toUpperCase()}}`;
+    const dn = `cn=${guid},cn=Policies,cn=System,${root}`;
+    const displayName = String(name || 'New Group Policy');
+    // AD 新建 GPO 必须同时创建 groupPolicyContainer 对象与其 SYSVOL 目录；
+    // 这里只创建目录对象并给出明确说明（SYSVOL 需域控侧补齐，避免产生不完整 GPO）。
+    await this.add(dn, {
+      objectClass: ['top', 'groupPolicyContainer'],
+      cn: guid,
+      displayName,
+      flags: '0',
+      versionNumber: '0',
+      description: 'Created by AD/LDAP Domain Manager',
+    });
+    const rows = await this.search(dn, { scope: 'base', attributes: ['cn', 'displayName', 'flags'] });
+    return { ...(rows[0] || { dn, displayName }), id: dn, name: displayName, enabled: true, linkedOUs: [], gpoLinks: [] };
+  }
+  async deleteGPO(id) {
+    // 禁止直接删除仍在链接的 GPO；先检查 gPLink 引用
+    const root = rootDnOf(this.cfg.baseDN) || this.cfg.baseDN;
+    const ous = await this.search(root, {
+      filter: '(|(objectClass=organizationalUnit)(objectClass=domainDNS))',
+      attributes: ['ou', 'dc', 'gPLink'],
+    });
+    for (const ou of ous) {
+      if (asArray(ou.gPLink).some(l => String(l).toLowerCase().includes(String(id).toLowerCase()))) {
+        throw ldapError('ENTRY_IN_USE', 'GPO 仍链接到 OU，请先解绑后再删除');
+      }
+    }
+    return this.del(id);
+  }
   async findByField(kind, field, value) {
     const oc = kind === 'user' ? 'user' : kind === 'computer' ? 'computer' : 'group';
     const v = String(value == null ? '' : value);

@@ -37,6 +37,7 @@
         { key: 'name', titleKey: 'objects.col.name', render: function (r) { return r.name || r.cn || ''; } },
         { key: 'dnsHostName', titleKey: 'objects.col.dnsHost', render: function (r) { return r.dnsHostName || r.dnshostname || ''; } },
         { key: 'operatingSystem', titleKey: 'objects.col.os', render: function (r) { return r.operatingSystem || ''; } },
+        { key: 'ou', titleKey: 'objects.col.ou', render: function (r) { return ouOfDn(r.dn); } },
         { key: 'enabled', titleKey: 'objects.col.enabled', render: function (r) { return flag(r, 'enabled', true); } },
         { key: 'description', titleKey: 'objects.col.description', render: function (r) { return r.description || ''; } }
       ],
@@ -73,7 +74,15 @@
       columns: [
         { key: 'name', titleKey: 'objects.col.name', render: function (r) { return r.name || r.displayName || ''; } },
         { key: 'enabled', titleKey: 'objects.col.gpoStatus', render: function (r) { return flag(r, 'enabled', true); } },
-        { key: 'links', titleKey: 'objects.col.gpoLinks', render: function (r) { return Array.isArray(r.links) ? r.links.join(', ') : (r.links || ''); } },
+        { key: 'links', titleKey: 'objects.col.gpoLinks', render: function (r) {
+          var links = Array.isArray(r.gpoLinks) && r.gpoLinks.length ? r.gpoLinks : (Array.isArray(r.linkedOUs) ? r.linkedOUs.map(function (u) { return { ou: u }; }) : []);
+          if (!links.length) return '—';
+          return links.map(function (l) {
+            var ou = l.ou || l;
+            var tag = l.enforced ? ' [强制]' : (l.inheritanceBlocked ? ' [阻止继承]' : '');
+            return ouOfDn(ou) + tag;
+          }).join('; ');
+        } },
         { key: 'description', titleKey: 'objects.col.description', render: function (r) { return r.description || ''; } }
       ],
       filters: []
@@ -90,6 +99,13 @@
 
   function rowName(row) {
     return row.displayName || row.name || row.cn || row.sAMAccountName || row.uid || row.dn || '';
+  }
+  // 从 DN 提取所属 OU（去掉首个 RDN 后的部分，显示为可读的 OU 路径）
+  function ouOfDn(dn) {
+    if (!dn) return '';
+    var parts = String(dn).split(',');
+    if (parts.length < 2) return '';
+    return parts.slice(1).map(function (p) { return p.replace(/^OU=/i, ''); }).join(' / ');
   }
 
   function toBool(v) { return v === true || v === 'true' || v === 1; }
@@ -520,6 +536,14 @@
           error ? h(C.Notice, { tone: 'error' }, error,
             h(C.Button, { size: 'sm', variant: 'ghost', onClick: loadList }, t('common.retry'))
           ) : null,
+          // 分页放在表格上方，避免数据多时下方按钮超出屏幕不可见
+          h(C.Pagination, {
+            page: page, pageSize: 20, total: total,
+            totalText: C.fmt(t('common.total'), { total: total }),
+            pageText: C.fmt(t('common.page'), { page: page, pages: Math.max(1, Math.ceil(total / 20)) }),
+            prevText: t('common.prev'), nextText: t('common.next'),
+            onChange: function (p) { setPage(p); }
+          }),
           h(C.Table, {
             columns: columns,
             rows: rows,
@@ -532,13 +556,6 @@
             onSelectAll: setSelected,
             selectAllLabel: t('common.all'),
             selectRowLabel: t('objects.selected')
-          }),
-          h(C.Pagination, {
-            page: page, pageSize: 20, total: total,
-            totalText: C.fmt(t('common.total'), { total: total }),
-            pageText: C.fmt(t('common.page'), { page: page, pages: Math.max(1, Math.ceil(total / 20)) }),
-            prevText: t('common.prev'), nextText: t('common.next'),
-            onChange: function (p) { setPage(p); }
           })
         )
       ),

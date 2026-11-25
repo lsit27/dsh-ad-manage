@@ -173,6 +173,9 @@ function gpoView(g) {
     flags: s(flagsRaw),
     enabled,
     linkedOUs: Array.isArray(g.linkedOUs) ? [...g.linkedOUs] : [],
+    gpoLinks: Array.isArray(g.gpoLinks) ? [...g.gpoLinks] : [],
+    gpcFileSysPath: s(g.gPCFileSysPath || first(attr(g, 'gPCFileSysPath'))),
+    whenCreated: s(g.whenCreated || first(attr(g, 'whenCreated'))),
     description: s(g.description || first(attr(g, 'description'))),
   };
 }
@@ -683,6 +686,25 @@ export function createDirectoryService({ ldap, store, auditor, rbac } = {}) {
         const g = await ldap.unbindGPO(idOf(id), ouId);
         write({ actor, action: 'directory.unbindGPO', target: s(g.dn || id), result: 'success', detail: { id, ouId } });
         return ok({ id, ouId, linkedOUs: g.linkedOUs });
+      });
+    },
+    async createGPO(g = {}, actor) {
+      return call(async () => {
+        guard(actor, ACTIONS.GPO_WRITE);
+        const name = g.name || g.displayName;
+        if (!name) return fail('NO_SUCH_OBJECT', '缺少策略名称。');
+        const created = await ldap.createGPO(name);
+        write({ actor, action: 'directory.createGPO', target: created.dn, result: 'success', detail: { name } });
+        return ok(created);
+      });
+    },
+    async deleteGPO(id, confirmToken, actor) {
+      return call(async () => {
+        guard(actor, ACTIONS.GPO_WRITE);
+        if (!confirmed(confirmToken)) return confirmError();
+        const deleted = await ldap.deleteGPO(idOf(id));
+        write({ actor, action: 'directory.deleteGPO', target: deleted.dn || String(id), result: 'success', detail: { id } });
+        return ok({ id, deleted: true });
       });
     },
 

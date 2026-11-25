@@ -131,7 +131,7 @@ export function apply(ctx, config = {}) {
         'rename', 'move', 'modifyPassword', 'changeState', 'unlock', 'addGroupMember',
         'removeGroupMember', 'listGroupMembers', 'listOU', 'createOU', 'renameOU',
         'moveOU', 'deleteOU', 'listOUObjects', 'listGPO', 'getGPO', 'toggleGPO',
-        'bindGPO', 'unbindGPO', 'findByField', 'unbind',
+        'bindGPO', 'unbindGPO', 'createGPO', 'deleteGPO', 'findByField', 'unbind',
       ].map(name => [name, async (...args) => (await ensureLdap())[name](...args)])),
     },
     store,
@@ -325,6 +325,8 @@ export function apply(ctx, config = {}) {
     'directory.toggleGPO': wrap(async (p) => { const r = await directory.toggleGPO(p, p.enabled, p.actor); if (r.ok) store.write('cache_gpos', []); return r }),
     'directory.bindGPO': wrap(async (p) => { const r = await directory.bindGPO(p.id, p.ou || p.ouDn, p.actor); if (r.ok) store.write('cache_gpos', []); return r }),
     'directory.unbindGPO': wrap(async (p) => { const r = await directory.unbindGPO(p.id, p.ou || p.ouDn, p.actor); if (r.ok) store.write('cache_gpos', []); return r }),
+    'directory.createGPO': wrap(async (p) => { const r = await directory.createGPO(p, p.actor); if (r.ok) store.write('cache_gpos', []); return r }),
+    'directory.deleteGPO': wrap(async (p) => { const r = await directory.deleteGPO(p, p.confirmToken, p.actor); if (r.ok) store.write('cache_gpos', []); return r }),
 
     // ---- 数据同步 ----
     'sync.status': wrap((p) => { const e = guard('config.read', p); return e || sync.status() }),

@@ -215,8 +215,14 @@ export function createSyncService({ store, directory, dataDir, logger } = {}) {
       const kw = String(q.keyword).toLowerCase()
       items = items.filter(row => Object.values(row || {}).some(v => String(v).toLowerCase().includes(kw)))
     }
-    // OU 过滤
-    if (q.ouDn) items = items.filter(row => String(row.dn || '').toLowerCase().endsWith(String(q.ouDn).toLowerCase()))
+    // OU 过滤：显示该 OU 及其所有子 OU 下的对象（子树匹配，而非仅直接子弟）
+    if (q.ouDn) {
+      const base = String(q.ouDn).toLowerCase()
+      items = items.filter(row => {
+        const dn = String(row.dn || '').toLowerCase()
+        return dn === base || dn.endsWith(',' + base)
+      })
+    }
     const total = items.length
     const page = Math.max(1, Number(q.page) || 1)
     const pageSize = Math.min(Math.max(1, Number(q.pageSize) || 20), 1000)
