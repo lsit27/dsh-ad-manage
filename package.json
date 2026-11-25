@@ -4,7 +4,7 @@
   "description": "AD/LDAP 域管理插件：可视化域连接配置与域对象全生命周期管理，支持 dsmarket 分发与在线更新。",
   "private": true,
   "type": "module",
-  "author": "DSH Market Contributor",
+  "author": "lsit27",
   "license": "MIT",
   "engines": {
     "node": ">=20",
@@ -42,5 +42,13 @@
   },
   "dependencies": {
     "ldapjs": "^3.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lsit27/dsh-ad-manage.git"
+  },
+  "homepage": "https://github.com/lsit27/dsh-ad-manage#readme",
+  "bugs": {
+    "url": "https://github.com/lsit27/dsh-ad-manage/issues"
   }
 }
