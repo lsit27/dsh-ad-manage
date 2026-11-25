@@ -1,6 +1,6 @@
 - insert:
-    - id: ad-ldap-domain-manager
-      name: '@local/ad-ldap-domain-manager'
+    - id: dsh-ad-manage
+      name: 'dsh-ad-manage'
       config:
         marketApiBase: ''
         ldapClientDriver: ''

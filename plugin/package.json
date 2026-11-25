@@ -1,5 +1,5 @@
 {
-  "name": "@local/ad-ldap-domain-manager",
+  "name": "dsh-ad-manage",
   "version": "1.0.0",
   "description": "AD/LDAP 域管理插件：可视化域连接配置与域对象全生命周期管理，支持 dsmarket 分发与在线更新。",
   "private": true,

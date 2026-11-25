@@ -2,6 +2,17 @@
 
 本插件采用语义化版本 `主版本.次版本.修订号`（Major.Minor.Patch）。
 
+## 项目更名（1.0.0 未对外发布前）
+
+- 项目 / npm 包名 / DSH 插件 ID：`@local/ad-ldap-domain-manager` → **`dsh-ad-manage`**
+- 离线安装包：`dist/dsh-ad-manage-1.0.0.tgz`
+- 界面品牌名同步为 `dsh-ad-manage 域管理`
+- DSH 技能名保持 `ad-domain-management` 不变（避免破坏已安装技能的引用）
+
+> 升级提示：包名/插件 ID 变更后需重新安装一次——
+> `dsh plugin --profile <name> remove @local/ad-ldap-domain-manager`，再
+> `dsh plugin --profile <name> add <本目录>`，然后重启 DSH。
+
 ## 1.0.0 — 2026-11-23
 
 首个正式发布版本。

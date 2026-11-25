@@ -3,7 +3,7 @@
     "title": "AD/LDAP 域管理插件",
     "description": "统一管理 AD/OpenLDAP 域连接、目录对象、组策略、审计与插件市场"
   },
-  "meta.title": "AD/LDAP 域管理",
+  "meta.title": "dsh-ad-manage 域管理",
   "meta.description": "统一管理 AD/OpenLDAP 域连接、目录对象、组策略、审计与插件市场",
   "common.ok": "确定",
   "common.cancel": "取消",

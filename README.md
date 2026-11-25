@@ -1,9 +1,10 @@
-# AD/LDAP 域管理插件 + AD 域控管理技能
+# dsh-ad-manage（AD/LDAP 域管理插件 + AD 域控管理技能）
 
 本仓库包含两部分：
 
-## 1. DSH 插件：AD/LDAP 域管理插件
+## 1. DSH 插件：dsh-ad-manage
 
+- 包名 / 插件 ID：`dsh-ad-manage`
 - 位置：`plugin/`（完整源码）
 - 功能：可视化配置 AD/OpenLDAP 连接，管理用户/计算机/安全组/OU/GPO，支持 dsmarket 分发、在线更新、本地缓存与定时同步。
 - 安装：见 `plugin/docs/INSTALL.md`。
@@ -21,7 +22,7 @@
 ├── README.md
 ├── LICENSE
 ├── plugin/                 # 插件完整源码（含 dist 安装包）
-│   ├── package.json
+│   ├── package.json        # name: dsh-ad-manage
 │   ├── plugin.json         # dsmarket 上架元信息
 │   ├── index.js / client.js
 │   ├── src/ / ui/ / locale/

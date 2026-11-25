@@ -11,7 +11,7 @@
 ## 2. 方式一：从 dsmarket 一键安装（推荐）
 
 1. 打开 DSH → 插件管理（Plugin Manager）→ 市场（dsmarket）。
-2. 搜索「AD/LDAP 域管理」或插件 ID `ad-ldap-domain-manager`。
+2. 搜索「AD/LDAP 域管理」或插件 ID `dsh-ad-manage`。
 3. 进入详情页，查看版本、兼容性、截图、功能说明与评论入口。
 4. 点击「安装」。安装前系统自动校验：
    - 主系统版本兼容性（engines.dsh）
@@ -23,10 +23,10 @@
 
 ## 3. 方式二：离线安装包手动导入
 
-1. 从发布方获取离线包 `dist/ad-ldap-domain-manager-1.0.0.tgz`（及同名 `.sha256` 校验文件）。
+1. 从发布方获取离线包 `dist/dsh-ad-manage-1.0.0.tgz`（及同名 `.sha256` 校验文件）。
 2. 校验完整性：
    ```bash
-   certutil -hashfile ad-ldap-domain-manager-1.0.0.tgz SHA256
+   certutil -hashfile dsh-ad-manage-1.0.0.tgz SHA256
    # 与 .sha256 文件内容比对
    ```
 3. 在插件管理页选择「从本地导入安装包」，选择该 tgz 文件。

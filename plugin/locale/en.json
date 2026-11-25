@@ -3,7 +3,7 @@
     "title": "AD/LDAP Domain Manager",
     "description": "Manage AD/OpenLDAP connections, directory objects, group policies, audit logs and plugin market"
   },
-  "meta.title": "AD/LDAP Domain Manager",
+  "meta.title": "dsh-ad-manage",
   "meta.description": "Manage AD/OpenLDAP connections, directory objects, group policies, audit logs and plugin market",
   "common.ok": "OK",
   "common.cancel": "Cancel",

@@ -3,7 +3,7 @@
 (function () {
   'use strict';
 
-  var MODULE_ID = '@local/ad-ldap-domain-manager';
+  var MODULE_ID = 'dsh-ad-manage';
   var LOCALE_NS = 'adLdapDomainManager';
 
   // Locale dictionaries embedded by the bundle loader; the JSON files are the
@@ -14,7 +14,7 @@
     "title": "AD/LDAP 域管理插件",
     "description": "统一管理 AD/OpenLDAP 域连接、目录对象、组策略、审计与插件市场"
   },
-  "meta.title": "AD/LDAP 域管理",
+  "meta.title": "dsh-ad-manage 域管理",
   "meta.description": "统一管理 AD/OpenLDAP 域连接、目录对象、组策略、审计与插件市场",
   "common.ok": "确定",
   "common.cancel": "取消",
@@ -317,7 +317,7 @@
     "title": "AD/LDAP Domain Manager",
     "description": "Manage AD/OpenLDAP connections, directory objects, group policies, audit logs and plugin market"
   },
-  "meta.title": "AD/LDAP Domain Manager",
+  "meta.title": "dsh-ad-manage",
   "meta.description": "Manage AD/OpenLDAP connections, directory objects, group policies, audit logs and plugin market",
   "common.ok": "OK",
   "common.cancel": "Cancel",
@@ -814,6 +814,10 @@
   // 每次调用都重新执行全部模块：模块只是覆盖 window.__DM_UI__.* 导出，
   // 重复执行安全；这样插件热更新后不会因 window 上残留的旧 App 而加载过期代码
   // （历史 bug：审计页因旧模块缺少安全序列化而整页空白）。
+
+  // 每次调用都重新执行全部模块：模块只是覆盖 window.__DM_UI__.* 导出，
+  // 重复执行安全；这样插件热更新后不会因 window 上残留的旧 App 而加载过期代码
+  // （历史 bug：审计页因旧模块缺少安全序列化而整页空白）。
   function installUi(require) {
     if (typeof window === 'undefined') return null;
     for (var i = 0; i < UI_SOURCES.length; i++) {
@@ -914,7 +918,7 @@
   // plus a direct page slot. Registration never throws.
   // 按 DSH 官方 slot 契约：侧栏图标用 list 型 sidebar.panellist（由宿主渲染按钮），
   // 主面板用 keyed 型 main，key 与侧栏项 id 一致。
-  var PANEL_ID = 'ad-ldap-domain-manager';
+  var PANEL_ID = 'dsh-ad-manage';
   var NAV_SLOTS = ['sidebar.panellist', 'settings.plugins', 'settings.section'];
   var PAGE_SLOTS = ['main', 'settings.plugins.page', 'settings.plugins.tab'];
 
@@ -995,7 +999,7 @@
       // Navigation row: clicking it asks the host to open the dedicated page.
       // Multiple host conventions are supported; none of them throws when absent.
       function openManager(ctx, props) {
-        var id = 'ad-ldap-domain-manager';
+        var id = 'dsh-ad-manage';
         var p = props || {};
         try {
           if (p.onOpen) { p.onOpen(id); return; }
@@ -1006,7 +1010,7 @@
             return;
           }
           if (ctx && ctx.pluginNavigation && typeof ctx.pluginNavigation.openBundle === 'function') {
-            ctx.pluginNavigation.openBundle('@local/ad-ldap-domain-manager');
+            ctx.pluginNavigation.openBundle('dsh-ad-manage');
             return;
           }
         } catch (e) { /* fall through to DOM custom event */ }

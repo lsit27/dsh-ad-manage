@@ -44,7 +44,7 @@ export function compareVersion(a, b) {
 function mockMarket() {
   return {
     plugin: {
-      id: 'dsmarket-ad-ldap-domain-manager',
+      id: 'dsmarket-dsh-ad-manage',
       name: 'AD/LDAP 域管理插件',
       publisher: 'DSH Market Contributor',
       summary: '可视化管理 AD/OpenLDAP 域连接与用户、计算机、组、OU、GPO 全生命周期，支持在线更新与灰度渠道。',
@@ -56,8 +56,8 @@ function mockMarket() {
       channel: 'stable',
       licenseMode: 'free',
       available: true,
-      commentsUrl: 'https://dsmarket.example.com/plugins/dsmarket-ad-ldap-domain-manager/comments',
-      homepage: 'https://dsmarket.example.com/plugins/dsmarket-ad-ldap-domain-manager'
+      commentsUrl: 'https://dsmarket.example.com/plugins/dsmarket-dsh-ad-manage/comments',
+      homepage: 'https://dsmarket.example.com/plugins/dsmarket-dsh-ad-manage'
     },
     versions: [
       { version: '1.2.0', releasedAt: '2026-10-20T00:00:00Z', channel: 'gray', force: false, changelog: '新增 GPO 绑定与灰度渠道；优化分页性能。', compatibility: '>=1.0.0', breaking: false, size: 0 },
@@ -83,7 +83,7 @@ export function createMarketService(options = {}) {
   const apiBase = String(config.apiBase || ENV.MARKET_API_BASE || DEFAULT_API_BASE).replace(/\/$/, '');
   const mock = config.mock === true || ENV.MARKET_MOCK === '1' || ENV.NODE_ENV === 'test';
   const currentVersion = resolveCurrentVersion(config);
-  const pluginId = config.pluginId || 'dsmarket-ad-ldap-domain-manager';
+  const pluginId = config.pluginId || 'dsmarket-dsh-ad-manage';
 
   function getCollection(name, fallback) {
     if (!store || typeof store.read !== 'function') return ok(fallback);

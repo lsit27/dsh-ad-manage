@@ -4,7 +4,7 @@
 AD/LDAP 域管理插件（AD/LDAP Domain Manager）
 
 ## 插件 ID
-`ad-ldap-domain-manager`
+`dsh-ad-manage`
 
 ## 封面图标
 `icon.svg`（原创蓝灰目录树图标，SVG，<256 KiB）
@@ -47,7 +47,7 @@ AD/LDAP 域管理插件（AD/LDAP Domain Manager）
 DSH Market Contributor
 
 ## 用户评论入口
-`https://dsmarket.example.com/plugins/ad-ldap-domain-manager/reviews`（演示地址，上架时替换为真实地址）
+`https://dsmarket.example.com/plugins/dsh-ad-manage/reviews`（演示地址，上架时替换为真实地址）
 
 ## 详情页章节结构
 1. 功能说明
