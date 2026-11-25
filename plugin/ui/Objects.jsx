@@ -579,6 +579,30 @@
     var setToken = tokenState[1];
     var typeKey = props.typeKey;
 
+    // 移动/绑定 GPO 时，目标 OU 从组织树点选（不手填 DN）
+    var ouNodesState = useState([]);
+    var ouNodes = ouNodesState[0];
+    var setOuNodes = ouNodesState[1];
+    var ouExpandedState = useState({});
+    var ouExpanded = ouExpandedState[0];
+    var setOuExpanded = ouExpandedState[1];
+    var ouLoadedState = useState(false);
+    var ouLoaded = ouLoadedState[0];
+    var setOuLoaded = ouLoadedState[1];
+
+    function ensureOuTree() {
+      if (ouLoaded) return;
+      setOuLoaded(true);
+      props.call('domain-manager.directory.listOUs', { page: 1, pageSize: 1000 }).then(function (res) {
+        var items = res && res.data && Array.isArray(res.data.items) ? res.data.items : [];
+        var tree = buildOUTree(items);
+        setOuNodes(tree);
+        var exp = {};
+        tree.forEach(function (n) { exp[n.id] = true; });
+        setOuExpanded(exp);
+      }).catch(function () {});
+    }
+
     function set(key, value) {
       setForm(function (prev) {
         var next = Object.assign({}, prev);
@@ -803,12 +827,22 @@
         )
       );
     } else if (kind === 'move') {
-      body = h(C.Field, { id: 'dm-move-ou', label: t('objects.field.targetOU'), required: true },
-        h(C.Input, {
-          id: 'dm-move-ou', value: form.targetOU || '',
-          placeholder: t('connect.baseDNPlaceholder'),
-          onChange: function (v) { set('targetOU', v); }
-        })
+      ensureOuTree();
+      body = h('div', null,
+        h(C.Field, { id: 'dm-move-ou', label: t('objects.field.targetOU'), required: true },
+          h('div', { className: 'dm-ou-picker' },
+            h(C.Tree, {
+              nodes: ouNodes,
+              expandedMap: ouExpanded,
+              selectedId: form.targetOU || '',
+              onSelect: function (id, node) { set('targetOU', node && node.dn ? node.dn : id); },
+              onToggle: function (id, open) {
+                setOuExpanded(function (prev) { var n = Object.assign({}, prev); n[id] = open; return n; });
+              }
+            })
+          )
+        ),
+        form.targetOU ? h('p', { className: 'dm-field__hint' }, t('objects.selectedOU') + '：' + form.targetOU) : null
       );
     } else if (kind === 'groups') {
       body = h('div', null,
@@ -830,9 +864,20 @@
           })
         ),
         h(C.Field, { id: 'dm-bind-ou', label: t('objects.field.targetOU') },
-          h(C.Input, { id: 'dm-bind-ou', value: form.targetOU || '', onChange: function (v) { set('targetOU', v); } })
+          h('div', { className: 'dm-ou-picker' },
+            h(C.Tree, {
+              nodes: ouNodes,
+              expandedMap: ouExpanded,
+              selectedId: form.targetOU || '',
+              onSelect: function (id, node) { set('targetOU', node && node.dn ? node.dn : id); },
+              onToggle: function (id, open) {
+                setOuExpanded(function (prev) { var n = Object.assign({}, prev); n[id] = open; return n; });
+              }
+            })
+          )
         )
       );
+      ensureOuTree();
     } else if (kind === 'rename') {
       body = h(C.Field, { id: 'dm-newname', label: t('objects.field.newName'), required: true },
         h(C.Input, { id: 'dm-newname', value: form.newName || '', onChange: function (v) { set('newName', v); } })

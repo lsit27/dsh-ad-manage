@@ -280,7 +280,7 @@ class MockLdapClient {
       if (scope === 'base' && e.dn.toLowerCase() !== baseStr.toLowerCase()) return false;
       if (scope === 'one' && parentDn(e.dn).toLowerCase() !== baseStr.toLowerCase()) return false;
       return matchFilter(filter, e.attrs);
-    }).map(e => ({ dn: e.dn, attributes: e.attrs.plain(), id: e.id }));
+    }).map(e => ({ dn: e.dn, dnRaw: e.dn, attributes: e.attrs.plain(), id: e.id }));
   }
   async searchPaged(base, options = {}) {
     const all = await this.search(base, options);
@@ -488,8 +488,8 @@ class MockLdapClient {
     const key = String(field).toLowerCase();
     const hit = list.find(e => String(e.attrs.first(key) ?? '').toLowerCase() === String(value ?? '').toLowerCase()
       || e.id === value || String(e.dn).toLowerCase() === String(value ?? '').toLowerCase());
-    // 必须与 search() 的返回结构一致：{ dn, id, attributes }，供目录服务的 attr() 读取
-    return hit ? { dn: hit.dn, id: hit.id, attributes: hit.attrs.plain() } : null;
+    // 必须与 search() 的返回结构一致：{ dn, id, dnRaw, attributes }，供目录服务的 attr() 读取
+    return hit ? { dn: hit.dn, dnRaw: hit.dn, id: hit.id, attributes: hit.attrs.plain() } : null;
   }
 }
 
@@ -645,10 +645,19 @@ class LdapjsLdapClient {
       this.client[method](...args, err => { clearTimeout(timer); if (err) return reject(mapLdapError(err)); resolve({ ok: true }); });
     });
   }
+  // ldapjs 3.x 的 modify 要求 modification 为 Attribute 实例，不能是普通对象。
+  _attr(name, values) {
+    const Attribute = this.ldapjs && this.ldapjs.Attribute;
+    if (!Attribute) return { name, values }; // 兼容旧版 ldapjs
+    return new Attribute({ type: name, values: Array.isArray(values) ? values : [values] });
+  }
   async add(dn, attrs) { return this._promiseCall('add', dn, attrs); }
   async modify(dn, changes) { return this._promiseCall('modify', dn, changes); }
   async modifyAttributes(dn, patch = {}) {
-    return this.modify(dn, Object.entries(patch).map(([name, values]) => ({ operation: 'replace', modification: { name, values: Array.isArray(values) ? values : [values] } })));
+    return this.modify(dn, Object.entries(patch).map(([name, values]) => ({
+      operation: 'replace',
+      modification: this._attr(name, Array.isArray(values) ? values : [values]),
+    })));
   }
   async del(dn) { return this._promiseCall('del', dn); }
   async rename(dn, newRdn) { return this._promiseCall('rename', dn, newRdn); }
@@ -660,8 +669,8 @@ class LdapjsLdapClient {
     return this.modifyAttributes(dn, { userAccountControl: String(enabled ? (uac & ~2) : (uac | 2)) });
   }
   async unlock(dn) { return this.modifyAttributes(dn, { lockoutTime: '0' }); }
-  async addGroupMember(g, m) { return this.modify(g, [{ operation: 'add', modification: { name: 'member', values: [m] } }]); }
-  async removeGroupMember(g, m) { return this.modify(g, [{ operation: 'delete', modification: { name: 'member', values: [m] } }]); }
+  async addGroupMember(g, m) { return this.modify(g, [{ operation: 'add', modification: this._attr('member', [m]) }]); }
+  async removeGroupMember(g, m) { return this.modify(g, [{ operation: 'delete', modification: this._attr('member', [m]) }]); }
   async listGroupMembers(g) {
     const rows = await this.search(g, { scope: 'base', attributes: ['member'] });
     return asArray(attributesValue(rows[0], 'member')).map(dn => ({ dn }));
@@ -711,8 +720,8 @@ class LdapjsLdapClient {
     return rows[0];
   }
   async toggleGPO(id, enabled) { return this.modifyAttributes(id, { flags: enabled ? '0' : '1' }); }
-  async bindGPO(id, ou) { return this.modify(ou, [{ operation: 'add', modification: { name: 'gPLink', values: [`[LDAP://${id};0]`] } }]); }
-  async unbindGPO(id, ou) { return this.modify(ou, [{ operation: 'delete', modification: { name: 'gPLink', values: [`[LDAP://${id};0]`] } }]); }
+  async bindGPO(id, ou) { return this.modify(ou, [{ operation: 'add', modification: this._attr('gPLink', [`[LDAP://${id};0]`]) }]); }
+  async unbindGPO(id, ou) { return this.modify(ou, [{ operation: 'delete', modification: this._attr('gPLink', [`[LDAP://${id};0]`]) }]); }
   async findByField(kind, field, value) {
     const oc = kind === 'user' ? 'user' : kind === 'computer' ? 'computer' : 'group';
     const v = String(value == null ? '' : value);
@@ -793,7 +802,8 @@ export function decodeDnEscapes(value) {
 
 function serializeEntry(entry) {
   const rawDn = entry.dn && entry.dn.toString ? entry.dn.toString() : String(entry.dn || '');
-  const out = { dn: decodeDnEscapes(rawDn) };
+  // dn 用于显示（解码中文）；dnRaw 保留服务器原始转义 DN，用于 LDAP 写操作。
+  const out = { dn: decodeDnEscapes(rawDn), dnRaw: rawDn };
   // ldapjs 的 entry.pojo.attributes 是 [{type, values}] 数组；
   // 某些实现给出 {name: values} 对象。两种都要支持，且绝不能产生数字键。
   const src = (entry.pojo && entry.pojo.attributes) || entry.attributes || [];

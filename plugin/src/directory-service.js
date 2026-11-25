@@ -205,6 +205,9 @@ export function createDirectoryService({ ldap, store, auditor, rbac } = {}) {
     if (!row) throw Object.assign(new Error('对象不存在或 DN 路径有误。'), { code: 'NO_SUCH_OBJECT' });
     return row;
   }
+  // 写操作必须用服务器原始 DN（转义形式）；解码后的中文 DN 只用于显示，
+  // 直接写回 AD 会报 No Such Object。dnRaw 由 serializeEntry 保留。
+  function writeDn(row) { return (row && row.dnRaw) || (row && row.dn) || ''; }
   async function _list(kind, q) {
     const selectedBase = ouDnOf(getBaseDN(), q);
     const filter = buildFilter(kind, q);
@@ -339,7 +342,7 @@ export function createDirectoryService({ ldap, store, auditor, rbac } = {}) {
         const map = { name: 'cn', cn: 'cn', username: 'sAMAccountName', sAMAccountName: 'sAMAccountName', upn: 'userPrincipalName', userPrincipalName: 'userPrincipalName', displayName: 'displayName', givenName: 'givenName', sn: 'sn', email: 'mail', mail: 'mail', mobile: 'mobile', employeeID: 'employeeID', employeeNumber: 'employeeNumber', department: 'department', company: 'company', title: 'title', telephoneNumber: 'telephoneNumber', physicalDeliveryOfficeName: 'physicalDeliveryOfficeName', manager: 'manager', description: 'description' };
         const patch = {};
         for (const [k, v] of Object.entries(u)) if (map[k] && v !== undefined) patch[map[k]] = v;
-        await ldap.modifyAttributes(row.dn, patch);
+        await ldap.modifyAttributes(writeDn(row), patch);
         write({ actor, action: 'directory.updateUser', target: row.dn, result: 'success', detail: { id: u.id } });
         return ok({ id: u.id || row.dn, dn: row.dn, ...patch });
       });
@@ -350,7 +353,7 @@ export function createDirectoryService({ ldap, store, auditor, rbac } = {}) {
         if (!confirmed(confirmToken)) return confirmError();
         if (!password || String(password).length < 8) return fail('PASSWORD_POLICY', '密码不符合域密码策略：至少 8 位。');
         const row = await findDn('user', 'id', id);
-        await ldap.modifyPassword(row.dn, password, confirmToken);
+        await ldap.modifyPassword(writeDn(row), password, confirmToken);
         write({ actor, action: 'directory.resetPassword', target: row.dn, result: 'success', detail: { id } });
         return ok({ id, changed: true });
       });
@@ -359,7 +362,7 @@ export function createDirectoryService({ ldap, store, auditor, rbac } = {}) {
       return call(async () => {
         guard(actor, ACTIONS.OBJECT_WRITE);
         const row = await findDn('user', 'id', id);
-        await ldap.changeState(row.dn, !!enabled);
+        await ldap.changeState(writeDn(row), !!enabled);
         write({ actor, action: 'directory.toggleUser', target: row.dn, result: 'success', detail: { id, enabled: !!enabled } });
         return ok({ id, enabled: !!enabled });
       });
@@ -368,7 +371,7 @@ export function createDirectoryService({ ldap, store, auditor, rbac } = {}) {
       return call(async () => {
         guard(actor, ACTIONS.OBJECT_WRITE);
         const row = await findDn('user', 'id', id);
-        await ldap.unlock(row.dn);
+        await ldap.unlock(writeDn(row));
         write({ actor, action: 'directory.unlockUser', target: row.dn, result: 'success', detail: { id } });
         return ok({ id, unlocked: true });
       });
@@ -378,7 +381,7 @@ export function createDirectoryService({ ldap, store, auditor, rbac } = {}) {
         guard(actor, ACTIONS.OBJECT_WRITE);
         const row = await findDn('user', 'id', id);
         const dest = ouDn && ouDn.dn ? ouDn.dn : ouDn;
-        await ldap.move(row.dn, dest);
+        await ldap.move(writeDn(row), dest);
         write({ actor, action: 'directory.moveUser', target: row.dn, result: 'success', detail: { id, ouDn: dest } });
         return ok({ id, dn: `${row.dn.split(',')[0]},${dest}` });
       });
@@ -388,7 +391,7 @@ export function createDirectoryService({ ldap, store, auditor, rbac } = {}) {
         guard(actor, ACTIONS.OBJECT_DELETE);
         if (!confirmed(confirmToken)) return confirmError();
         const row = await findDn('user', 'id', id);
-        await ldap.del(row.dn, confirmToken);
+        await ldap.del(writeDn(row), confirmToken);
         write({ actor, action: 'directory.deleteUser', target: row.dn, result: 'success', detail: { id } });
         return ok({ id, deleted: true });
       });
@@ -427,7 +430,7 @@ export function createDirectoryService({ ldap, store, auditor, rbac } = {}) {
         const map = { name: 'cn', cn: 'cn', dnsHostName: 'dNSHostName', dnshostname: 'dNSHostName', operatingSystem: 'operatingSystem', os: 'operatingSystem', description: 'description' };
         const patch = {};
         for (const [k, v] of Object.entries(c)) if (map[k] && v !== undefined) patch[map[k]] = v;
-        await ldap.modifyAttributes(row.dn, patch);
+        await ldap.modifyAttributes(writeDn(row), patch);
         write({ actor, action: 'directory.updateComputer', target: row.dn, result: 'success', detail: { id: c.id } });
         return ok({ id: c.id || row.dn, dn: row.dn, ...patch });
       });
@@ -443,7 +446,7 @@ export function createDirectoryService({ ldap, store, auditor, rbac } = {}) {
         guard(actor, ACTIONS.OBJECT_WRITE);
         const row = await findDn('computer', 'id', id);
         const dest = ouDn && ouDn.dn ? ouDn.dn : ouDn;
-        await ldap.move(row.dn, dest);
+        await ldap.move(writeDn(row), dest);
         write({ actor, action: 'directory.moveComputer', target: row.dn, result: 'success', detail: { id, ouDn: dest } });
         return ok({ id, dn: `${row.dn.split(',')[0]},${dest}` });
       });
@@ -453,7 +456,7 @@ export function createDirectoryService({ ldap, store, auditor, rbac } = {}) {
         guard(actor, ACTIONS.OBJECT_DELETE);
         if (!confirmed(confirmToken)) return confirmError();
         const row = await findDn('computer', 'id', id);
-        await ldap.del(row.dn, confirmToken);
+        await ldap.del(writeDn(row), confirmToken);
         write({ actor, action: 'directory.deleteComputer', target: row.dn, result: 'success', detail: { id } });
         return ok({ id, deleted: true });
       });
@@ -462,7 +465,7 @@ export function createDirectoryService({ ldap, store, auditor, rbac } = {}) {
       return call(async () => {
         guard(actor, ACTIONS.OBJECT_WRITE);
         const row = await findDn('computer', 'id', id);
-        await ldap.changeState(row.dn, !!enabled);
+        await ldap.changeState(writeDn(row), !!enabled);
         write({ actor, action: 'directory.toggleComputer', target: row.dn, result: 'success', detail: { id, enabled: !!enabled } });
         return ok({ id, enabled: !!enabled });
       });
@@ -492,7 +495,7 @@ export function createDirectoryService({ ldap, store, auditor, rbac } = {}) {
         const map = { name: 'cn', cn: 'cn', samAccountName: 'sAMAccountName', description: 'description', scope: 'groupScope' };
         const patch = {};
         for (const [k, v] of Object.entries(g)) if (map[k] && v !== undefined) patch[map[k]] = v;
-        await ldap.modifyAttributes(row.dn, patch);
+        await ldap.modifyAttributes(writeDn(row), patch);
         write({ actor, action: 'directory.updateGroup', target: row.dn, result: 'success', detail: { id: g.id } });
         return ok({ id: g.id || row.dn, dn: row.dn, ...patch });
       });
@@ -511,7 +514,7 @@ export function createDirectoryService({ ldap, store, auditor, rbac } = {}) {
         for (const m of list) {
           const dn = typeof m === 'string' ? m
             : (m.dn || (await findDn('user', 'id', m.id || m.username)).dn);
-          await ldap.addGroupMember(group.dn, dn);
+          await ldap.addGroupMember(writeDn(group), dn);
         }
         write({ actor, action: 'directory.addGroupMembers', target: group.dn, result: 'success', detail: { id, members: list } });
         return ok({ id, added: list.length });
@@ -525,7 +528,7 @@ export function createDirectoryService({ ldap, store, auditor, rbac } = {}) {
         for (const m of list) {
           const dn = typeof m === 'string' ? m
             : (m.dn || (await findDn('user', 'id', m.id || m.username)).dn);
-          await ldap.removeGroupMember(group.dn, dn);
+          await ldap.removeGroupMember(writeDn(group), dn);
         }
         write({ actor, action: 'directory.removeGroupMembers', target: group.dn, result: 'success', detail: { id, members: list } });
         return ok({ id, removed: list.length });
@@ -536,7 +539,7 @@ export function createDirectoryService({ ldap, store, auditor, rbac } = {}) {
         guard(actor, ACTIONS.OBJECT_DELETE);
         if (!confirmed(confirmToken)) return confirmError();
         const row = await findDn('group', 'id', id);
-        await ldap.del(row.dn, confirmToken);
+        await ldap.del(writeDn(row), confirmToken);
         write({ actor, action: 'directory.deleteGroup', target: row.dn, result: 'success', detail: { id } });
         return ok({ id, deleted: true });
       });
@@ -545,7 +548,7 @@ export function createDirectoryService({ ldap, store, auditor, rbac } = {}) {
       return call(async () => {
         guard(actor || 'viewer', ACTIONS.OBJECT_READ);
         const group = await findDn('group', 'id', id);
-        const items = ldap.listGroupMembers ? await ldap.listGroupMembers(group.dn) : [];
+        const items = ldap.listGroupMembers ? await ldap.listGroupMembers(writeDn(group)) : [];
         return ok({ items, total: items.length });
       });
     },

@@ -104,6 +104,7 @@
   "objects.ous": "Organizational Unit Management",
   "objects.gpos": "Group Policy Management",
   "objects.description": "Browse and maintain directory objects with paging, search, filters and OU navigation.",
+  "objects.selectedOU": "Selected OU",
   "objects.col.name": "Name",
   "objects.col.sam": "Logon name",
   "objects.col.upn": "UPN",

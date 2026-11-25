@@ -104,6 +104,7 @@
   "objects.ous": "组织单元管理",
   "objects.gpos": "组策略管理",
   "objects.description": "浏览与维护目录对象，支持分页、搜索、条件筛选与 OU 导航。",
+  "objects.selectedOU": "已选择 OU",
   "objects.col.name": "名称",
   "objects.col.sam": "登录名",
   "objects.col.upn": "UPN",
