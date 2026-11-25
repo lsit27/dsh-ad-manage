@@ -321,9 +321,10 @@ export function apply(ctx, config = {}) {
     'directory.deleteOU': wrap((p) => directory.deleteOU(p, p.confirmToken, p.actor)),
 
     'directory.getGPO': wrap((p) => directory.getGPO(p, p.actor)),
-    'directory.toggleGPO': wrap((p) => directory.toggleGPO(p, p.enabled, p.actor)),
-    'directory.bindGPO': wrap((p) => directory.bindGPO(p.id, p.ou || p.ouDn, p.actor)),
-    'directory.unbindGPO': wrap((p) => directory.unbindGPO(p.id, p.ou || p.ouDn, p.actor)),
+    // GPO 状态变更后清空缓存，让下次列表强制实时读取 AD，避免"提示成功但状态没刷新"。
+    'directory.toggleGPO': wrap(async (p) => { const r = await directory.toggleGPO(p, p.enabled, p.actor); if (r.ok) store.write('cache_gpos', []); return r }),
+    'directory.bindGPO': wrap(async (p) => { const r = await directory.bindGPO(p.id, p.ou || p.ouDn, p.actor); if (r.ok) store.write('cache_gpos', []); return r }),
+    'directory.unbindGPO': wrap(async (p) => { const r = await directory.unbindGPO(p.id, p.ou || p.ouDn, p.actor); if (r.ok) store.write('cache_gpos', []); return r }),
 
     // ---- 数据同步 ----
     'sync.status': wrap((p) => { const e = guard('config.read', p); return e || sync.status() }),

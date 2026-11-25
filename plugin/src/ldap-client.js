@@ -719,7 +719,25 @@ class LdapjsLdapClient {
     if (!rows[0]) throw ldapError('NO_SUCH_OBJECT', String(id));
     return rows[0];
   }
-  async toggleGPO(id, enabled) { return this.modifyAttributes(id, { flags: enabled ? '0' : '1' }); }
+  async toggleGPO(id, enabled) {
+    // AD 的 flags 属性：bit0(0x1)=GPO 禁用。必须读取当前值后只改 bit0，
+    // 不能写死 0/1（会清掉"用户/计算机配置禁用"等其它标志位，导致启用后实际仍被禁用）。
+    const rows = await this.search(id, { scope: 'base', attributes: ['flags'] });
+    const cur = Number((rows[0] && (rows[0].flags || attributesValue(rows[0], 'flags'))) || 0);
+    const arr = Array.isArray(rows[0] && rows[0].flags) ? rows[0].flags : (rows[0] && attributesValue(rows[0], 'flags'));
+    const current = Number((Array.isArray(arr) ? arr[0] : arr) || cur || 0);
+    const next = enabled ? (current & ~1) : (current | 1);
+    await this.modifyAttributes(id, { flags: String(next) });
+    // 回读验证：确认 AD 中的实际状态与目标一致，不一致则报错（避免"提示成功但没生效"）
+    const check = await this.search(id, { scope: 'base', attributes: ['flags'] });
+    const arr2 = Array.isArray(check[0] && check[0].flags) ? check[0].flags : (check[0] && attributesValue(check[0], 'flags'));
+    const actual = Number((Array.isArray(arr2) ? arr2[0] : arr2) || 0);
+    const disabled = (actual & 1) === 1;
+    if (disabled === enabled) {
+      throw ldapError('UNKNOWN', `GPO 状态写入后未生效（期望${enabled ? '启用' : '禁用'}，实际仍${disabled ? '禁用' : '启用'}）`);
+    }
+    return { ...(check[0] || {}), flags: String(actual), enabled };
+  }
   async bindGPO(id, ou) { return this.modify(ou, [{ operation: 'add', modification: this._attr('gPLink', [`[LDAP://${id};0]`]) }]); }
   async unbindGPO(id, ou) { return this.modify(ou, [{ operation: 'delete', modification: this._attr('gPLink', [`[LDAP://${id};0]`]) }]); }
   async findByField(kind, field, value) {

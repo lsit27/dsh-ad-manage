@@ -156,10 +156,22 @@ function groupView(row) {
   };
 }
 function gpoView(g) {
+  // AD GPO 的 flags 属性 bit0(0x1)=禁用。必须据此推导 enabled，
+  // 不能只看 g.enabled（ldapjs 驱动不会返回该派生字段，导致状态显示永远为 true）。
+  const flagsRaw = first(attr(g, 'flags'));
+  let enabled;
+  if (g.enabled !== undefined && g.enabled !== null) {
+    enabled = !!g.enabled;
+  } else if (flagsRaw !== undefined && flagsRaw !== '') {
+    enabled = (Number(flagsRaw) & 1) === 0;
+  } else {
+    enabled = true;
+  }
   return {
     id: s(g.id || g.dn), dn: s(g.dn),
     name: s(g.name || first(attr(g, 'displayName')) || first(attr(g, 'cn'))),
-    enabled: g.enabled === undefined ? true : !!g.enabled,
+    flags: s(flagsRaw),
+    enabled,
     linkedOUs: Array.isArray(g.linkedOUs) ? [...g.linkedOUs] : [],
     description: s(g.description || first(attr(g, 'description'))),
   };
@@ -360,9 +372,23 @@ export function createDirectoryService({ ldap, store, auditor, rbac } = {}) {
       return call(async () => {
         guard(actor, ACTIONS.OBJECT_WRITE);
         const row = await findForWrite(u, 'user');
+        if (!row) return fail('NO_SUCH_OBJECT', '找不到要编辑的用户。');
         const map = { name: 'cn', cn: 'cn', username: 'sAMAccountName', sAMAccountName: 'sAMAccountName', upn: 'userPrincipalName', userPrincipalName: 'userPrincipalName', displayName: 'displayName', givenName: 'givenName', sn: 'sn', email: 'mail', mail: 'mail', mobile: 'mobile', employeeID: 'employeeID', employeeNumber: 'employeeNumber', department: 'department', company: 'company', title: 'title', telephoneNumber: 'telephoneNumber', physicalDeliveryOfficeName: 'physicalDeliveryOfficeName', manager: 'manager', description: 'description' };
+        // 只写有实际值的字段；空字符串会让 AD 报 Invalid Attribute Syntax（尤其 DN 型属性 manager）。
         const patch = {};
-        for (const [k, v] of Object.entries(u)) if (map[k] && v !== undefined) patch[map[k]] = v;
+        for (const [k, v] of Object.entries(u)) {
+          if (!map[k] || v === undefined) continue;
+          if (typeof v === 'string' && v.trim() === '') continue;
+          patch[map[k]] = v;
+        }
+        // manager 是 DN 语法：若传入的是显示名（不含 '='），按用户名查其 DN；查不到则跳过，避免语法错误。
+        if (patch.manager && !/=/.test(String(patch.manager))) {
+          const mgrName = String(patch.manager);
+          let mgrDn = null;
+          try { const m = await ldap.findByField('user', 'sAMAccountName', mgrName); mgrDn = m && (m.dnRaw || m.dn); } catch (e) { /* ignore */ }
+          if (mgrDn) patch.manager = mgrDn; else delete patch.manager;
+        }
+        if (!Object.keys(patch).length) return ok({ id: u.id || row.dn, dn: row.dn, unchanged: true });
         await ldap.modifyAttributes(writeDn(row), patch);
         write({ actor, action: 'directory.updateUser', target: row.dn, result: 'success', detail: { id: u.id } });
         return ok({ id: u.id || row.dn, dn: row.dn, ...patch });
@@ -636,8 +662,9 @@ export function createDirectoryService({ ldap, store, auditor, rbac } = {}) {
       return call(async () => {
         guard(actor, ACTIONS.GPO_WRITE);
         const g = await ldap.toggleGPO(idOf(id), !!enabled);
-        write({ actor, action: 'directory.toggleGPO', target: s(g.dn || id), result: 'success', detail: { id, enabled: !!enabled } });
-        return ok({ id, enabled: !!enabled });
+        const view = gpoView(g);
+        write({ actor, action: 'directory.toggleGPO', target: s(g.dn || id), result: 'success', detail: { id, enabled: view.enabled } });
+        return ok({ id, enabled: view.enabled, flags: view.flags });
       });
     },
     async bindGPO(id, ou, actor) {

@@ -118,23 +118,21 @@ export function createSyncService({ store, directory, dataDir, logger } = {}) {
       ]
       const totals = {}
       const errors = {}
+      // 先在内存中拉齐全部类型，全部成功后才一次性落盘。
+      // 避免重启时连接未就绪导致部分类型写空/写旧，造成 OU 归属错乱。
+      const fetched = {}
       for (const [kind, method] of kinds) {
         try {
-          // 一次性拉全量（pageSize 上限 1000，通常足够；更大目录可在后续增强）
-          // 单次查询加超时保护，避免某个调用永久挂起导致同步卡死
-          // 必须强制实时查询（useLive=true），否则会读到旧缓存，导致同步永远不更新。
           const res = await Promise.race([
             directory[method]({ page: 1, pageSize, useLive: true }),
             new Promise((_, rej) => setTimeout(() => rej(new Error('同步查询超时')), 60000)),
           ])
           if (!res || !res.ok) {
             errors[kind] = (res && res.error && res.error.message) ? res.error.message : '查询失败'
-            totals[kind] = 0
             continue
           }
           let items = res.data && Array.isArray(res.data.items) ? res.data.items : []
           const total = res.data && res.data.total != null ? res.data.total : items.length
-          // 若对象数超过单页上限，继续拉后续页，保证缓存完整（避免数据缺失/错乱）
           const totalPages = Math.ceil(total / pageSize)
           for (let pg = 2; pg <= totalPages && items.length < total; pg++) {
             try {
@@ -142,18 +140,19 @@ export function createSyncService({ store, directory, dataDir, logger } = {}) {
                 directory[method]({ page: pg, pageSize, useLive: true }),
                 new Promise((_, rej) => setTimeout(() => rej(new Error('分页同步超时')), 60000)),
               ])
-              if (more && more.ok && more.data && Array.isArray(more.data.items)) {
-                items = items.concat(more.data.items)
-              }
-            } catch (e) { /* 后续页失败则保留已拉取部分 */ }
+              if (more && more.ok && more.data && Array.isArray(more.data.items)) items = items.concat(more.data.items)
+            } catch (e) { /* 保留已拉取部分 */ }
           }
-          const w = store.write(CACHE_KEYS[kind], items)
-          if (!w.ok) errors[kind] = w.error ? w.error.message : '写入缓存失败'
+          fetched[kind] = items
           totals[kind] = total
         } catch (e) {
           errors[kind] = e && e.message ? e.message : String(e)
-          totals[kind] = 0
         }
+      }
+      // 原子落盘：只对成功拉取的类型写缓存；失败类型保留上一次的缓存，不写空。
+      for (const [kind, items] of Object.entries(fetched)) {
+        const w = store.write(CACHE_KEYS[kind], items)
+        if (!w.ok) errors[kind] = w.error ? w.error.message : '写入缓存失败'
       }
       const hasErrors = Object.keys(errors).length > 0
       const meta = {

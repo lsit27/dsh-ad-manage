@@ -790,6 +790,10 @@
   // 每次调用都重新执行全部模块：模块只是覆盖 window.__DM_UI__.* 导出，
   // 重复执行安全；这样插件热更新后不会因 window 上残留的旧 App 而加载过期代码
   // （历史 bug：审计页因旧模块缺少安全序列化而整页空白）。
+
+  // 每次调用都重新执行全部模块：模块只是覆盖 window.__DM_UI__.* 导出，
+  // 重复执行安全；这样插件热更新后不会因 window 上残留的旧 App 而加载过期代码
+  // （历史 bug：审计页因旧模块缺少安全序列化而整页空白）。
   function installUi(require) {
     if (typeof window === 'undefined') return null;
     for (var i = 0; i < UI_SOURCES.length; i++) {
